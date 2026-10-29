@@ -213,6 +213,26 @@ TEST(Signal, AdditiveChecksumMissesSomeTwoBitErrors) {
   CHECK(missed > 0);
 }
 
+TEST(Signal, Crc8ThreeBitResidual) {
+  // CRC-8 has Hamming distance 3 at this length: some 3-bit errors pass.
+  Frame f = make_frame(id::kEscVehicleSpeed);
+  set(f, "VehicleSpeed", 0.0);
+  set(f, "SpeedValid", 1);
+  seal(f, 3);
+  int undetected = 0, total = 0;
+  for (int i = 0; i < 56; ++i)
+    for (int j = i + 1; j < 56; ++j)
+      for (int k = j + 1; k < 56; ++k) {
+        Frame g = f;
+        for (int b : {i, j, k}) g.data[b / 8] ^= static_cast<uint8_t>(1U << (b % 8));
+        ++total;
+        if (checksum_ok(g)) ++undetected;
+      }
+  std::printf("    CRC-8 undetected 3-bit errors: %d of %d\n", undetected, total);
+  CHECK(undetected > 0);
+  CHECK(undetected < total / 100);
+}
+
 TEST(Signal, Crc8KnownVector) {
   // CRC-8 SAE J1850 check value for "123456789" is 0x4B; our framing adds
   // the ID bytes, so verify via an independent recomputation of the frame.
