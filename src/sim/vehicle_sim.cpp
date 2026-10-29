@@ -41,6 +41,7 @@ void VehicleSim::set_switch(Din pin, bool v) {
   changed_ms_[i] = last_now_;
   if (v && pin == Din::LockSw) last_lock_request_ms = static_cast<int32_t>(last_now_);
   if (v && pin == Din::UnlockSw) last_unlock_request_ms = static_cast<int32_t>(last_now_);
+  if (!v && pin == Din::WasherSw) last_washer_release_ms = static_cast<int32_t>(last_now_);
   const bool wiper_pin = pin == Din::WiperAuto || pin == Din::WiperLow || pin == Din::WiperHigh;
   if (wiper_pin && !intended_[static_cast<int>(Din::WiperAuto)] && !intended_[static_cast<int>(Din::WiperLow)] &&
       !intended_[static_cast<int>(Din::WiperHigh)]) {
@@ -94,7 +95,7 @@ void VehicleSim::transmit(can::Frame f, uint32_t now_ms) {
   const bool delivered = hal_.deliver(f);
   if (delivered && f.id == can::id::kAcuCrashStatus && !corrupted && !flt.freeze_counter && crash) {
     ++crash_frames_delivered;
-    if (crash_frames_delivered == 2) crash_confirmed_ms = static_cast<int32_t>(now_ms);
+    if (crash_frames_delivered == 1) crash_first_ms = static_cast<int32_t>(now_ms);
   }
 }
 

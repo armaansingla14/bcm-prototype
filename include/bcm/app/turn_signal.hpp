@@ -15,6 +15,8 @@ namespace bcm::app {
 ///   off-gap shorter than off_ms: a started flash is always completed and a
 ///   new activation waits for the off time to elapse (relay-flasher
 ///   behaviour, avoids lamp flicker from switch chatter)
+/// * exception: a crash event restarts the flasher immediately with both
+///   lamps on, so the hazard pattern starts without waiting for the cadence
 class TurnSignalSm {
  public:
   enum class Request : uint8_t { None, Left, Right, Hazard };

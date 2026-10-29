@@ -40,6 +40,8 @@ class Bcm : public Controller {
     uint32_t momentary_stuck_ms = 10000;
     uint32_t status_period_ms = 100;
     uint8_t crash_confirm_frames = 2;
+    double max_speed_step_kph = 5.0;  ///< per ESC frame (20 ms)
+    uint8_t speed_resync_frames = 3;
   };
 
   explicit Bcm(hal::IHal& hal);
@@ -59,6 +61,7 @@ class Bcm : public Controller {
   const can::CanIf& canif() const { return canif_; }
   const CanInputs& can_inputs() const { return can_; }
   const can::RxMonitor& esc_monitor() const { return esc_; }
+  uint32_t speed_rejects() const { return speed_rejects_; }
   const can::RxMonitor& ecm_monitor() const { return ecm_; }
   const can::RxMonitor& acu_monitor() const { return acu_; }
   const can::RxMonitor& rls_monitor() const { return rls_; }
@@ -88,6 +91,10 @@ class Bcm : public Controller {
 
   CanInputs can_;
   uint8_t crash_frames_ = 0;
+  bool speed_init_ = false;
+  uint8_t speed_jump_run_ = 0;
+  double speed_jump_value_ = 0.0;
+  uint32_t speed_rejects_ = 0;
   bool crash_latched_ = false;
   uint32_t last_status_ms_ = 0;
   bool status_sent_once_ = false;

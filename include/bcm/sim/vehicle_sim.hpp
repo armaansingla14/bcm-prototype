@@ -67,8 +67,9 @@ class VehicleSim {
   int32_t last_lock_request_ms = -1000000;    ///< lock switch press / RKE lock
   int32_t last_unlock_request_ms = -1000000;  ///< unlock switch press / RKE unlock
   int32_t crash_frames_delivered = 0;         ///< valid crash=1 frames delivered
-  int32_t crash_confirmed_ms = -1;            ///< time of 2nd valid crash frame
+  int32_t crash_first_ms = -1;                ///< time of 1st valid crash=1 frame delivered
   int32_t last_wiper_off_ms = -1;             ///< intended wiper switch -> off
+  int32_t last_washer_release_ms = -1000000;  ///< washer button released
   uint32_t frames_sent = 0;
   uint32_t frames_corrupted = 0;
 

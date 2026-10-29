@@ -12,7 +12,7 @@ namespace bcm::sim {
 /// Black-box requirements checked against plant truth and the BCM's pin and
 /// bus outputs. The monitor knows nothing about controller internals.
 enum class Req : uint8_t {
-  CrashResponse,     ///< R1 doors unlocked <=300 ms after crash and kept unlocked 10 s; hazards on <=500 ms
+  CrashResponse,     ///< R1 doors unlocked <=300 ms after first crash frame and kept unlocked 10 s; hazards on <=500 ms
   UncommandedLock,   ///< R2 lock state changes only with a request (switch/RKE), speed >15 km/h or crash
   StarterProtect,    ///< R3 starter <=10 s continuous and never >300 ms with the engine running
   FlasherTiming,     ///< R4 indicator on-pulses 250..450 ms, off-gaps >=250 ms
@@ -35,7 +35,7 @@ class RequirementMonitor {
 
   const std::array<int, kNumReq>& violations() const { return v_; }
   int total() const;
-  /// crash: time from confirmed crash frame to doors physically unlocked
+  /// crash: time from the first valid crash frame to doors physically unlocked
   /// (-1 if the doors were not locked at the crash)
   int32_t crash_unlock_latency_ms() const { return crash_latency_; }
   /// bus-off: time from bus fault removal to the next BCM_Status on the bus
@@ -81,6 +81,7 @@ class RequirementMonitor {
   bool r7_flag_ = false;
   // R8
   int32_t r8_checked_for_ = -1;
+  int64_t r8_last_stall_ = -1000000;
   // R9
   uint32_t lockmot_on_ms_ = 0;
   bool r9_cont_flag_ = false;

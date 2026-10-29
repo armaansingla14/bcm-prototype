@@ -1,5 +1,7 @@
 #include "bcm/app/bcm.hpp"
 
+#include <cmath>
+
 #include "bcm/can/bcm_db.hpp"
 
 namespace bcm::app {
@@ -62,8 +64,26 @@ void Bcm::process_can(uint32_t now) {
     switch (f.id) {
       case can::id::kEscVehicleSpeed:
         if (esc_.on_frame(f, now)) {
-          can_.speed_kph = can::get(f, "VehicleSpeed");
-          can_.speed_valid = can::get(f, "SpeedValid") > 0.5;
+          // plausibility: a vehicle cannot change speed by more than a few
+          // km/h in one 20 ms frame. Isolated jumps (residual corruption
+          // that passed the CRC) are dropped; a new level is accepted once
+          // it has been seen in consecutive frames.
+          const double v = can::get(f, "VehicleSpeed");
+          const bool jump = speed_init_ && std::fabs(v - can_.speed_kph) > cfg_.max_speed_step_kph;
+          bool accept = !jump;
+          if (jump) {
+            const bool consistent = speed_jump_run_ > 0 && std::fabs(v - speed_jump_value_) <= cfg_.max_speed_step_kph;
+            speed_jump_run_ = consistent ? static_cast<uint8_t>(speed_jump_run_ + 1) : 1;
+            speed_jump_value_ = v;
+            accept = speed_jump_run_ >= cfg_.speed_resync_frames;
+            if (!accept) ++speed_rejects_;
+          }
+          if (accept) {
+            can_.speed_kph = v;
+            can_.speed_valid = can::get(f, "SpeedValid") > 0.5;
+            speed_init_ = true;
+            speed_jump_run_ = 0;
+          }
         }
         break;
       case can::id::kEcmEngineStatus:
@@ -100,6 +120,7 @@ void Bcm::process_can(uint32_t now) {
     }
   }
   esc_.update(now);
+  if (!esc_.usable()) speed_init_ = false;  // re-synchronise after a timeout
   ecm_.update(now);
   acu_.update(now);
   rls_.update(now);

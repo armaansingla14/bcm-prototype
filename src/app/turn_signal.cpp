@@ -40,8 +40,15 @@ void TurnSignalSm::step(const Inputs& in, uint32_t now_ms) {
     request_ = Request::None;
   }
 
-  // flasher
-  if (lamp_on_) {
+  // flasher; a crash pre-empts the normal cadence so the hazard pattern
+  // starts immediately on both sides
+  if (in.crash_event) {
+    lamp_on_ = true;
+    side_ = Request::Hazard;
+    phase_start_ms_ = now_ms;
+    phase_started_ = true;
+    ++flashes_;
+  } else if (lamp_on_) {
     if (now_ms - phase_start_ms_ >= cfg_.on_ms) {
       lamp_on_ = false;
       phase_start_ms_ = now_ms;

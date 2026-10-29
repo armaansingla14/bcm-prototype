@@ -54,6 +54,7 @@ class LightingSm {
   bool high_ = false;
   bool dark_ = false;
   bool fail_safe_ = false;
+  bool auto_prev_ = false;
   bool rain_on_ = false;
   uint32_t below_since_ = 0;
   uint32_t above_since_ = 0;

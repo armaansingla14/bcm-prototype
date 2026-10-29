@@ -46,8 +46,12 @@ double decode(const Frame& f, const SignalDef& s);
 void encode(Frame& f, const SignalDef& s, double phys);
 
 /// E2E protection used on every supervised message in bcm.dbc:
-/// byte 6 low nibble = alive counter, byte 7 = checksum.
+/// byte 6 low nibble = alive counter, byte 7 = CRC-8 (SAE J1850) over the
+/// two message-ID bytes and data bytes 0..6.
 uint8_t compute_checksum(const Frame& f);
+/// Simple additive checksum (first prototype). Kept only for the
+/// comparison test that shows which bit-error patterns it misses.
+uint8_t compute_checksum_additive(const Frame& f);
 void seal(Frame& f, uint8_t alive_counter);  ///< writes counter + checksum
 bool checksum_ok(const Frame& f);
 uint8_t alive_counter(const Frame& f);

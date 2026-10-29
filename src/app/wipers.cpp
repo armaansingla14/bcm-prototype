@@ -134,7 +134,9 @@ void WiperSm::step(const Inputs& in, uint32_t now_ms) {
       if (wipes_left_ == 0 || !powered) state_ = State::Parking;
       break;
     case State::Stalled:
-      if (in.sw == WiperSwitch::Off && !in.washer) state_ = State::Parked;
+      // switching off acknowledges the fault and tries one park run; if the
+      // motor is still blocked the stall supervision trips again
+      if (in.sw == WiperSwitch::Off && !in.washer) state_ = in.park ? State::Parked : State::Parking;
       break;
     case State::Suspended:
       break;

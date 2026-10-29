@@ -16,14 +16,14 @@ const char* to_string(Req r) {
 
 const char* describe(Req r) {
   static const char* d[] = {
-      "Doors unlocked <=300 ms after a confirmed crash frame and kept unlocked 10 s; both indicators lit <=500 ms",
+      "Doors unlocked <=300 ms after the first valid crash frame and kept unlocked 10 s; both indicators lit <=500 ms",
       "Door lock state changes only after a lock/unlock request (switch, RKE), speed >15 km/h, or a crash",
       "Starter energised <=10 s continuously and never >300 ms while the engine runs",
-      "Indicator on-pulses 250-450 ms and off-gaps >=250 ms",
+      "Indicator on-pulses 250-450 ms and off-gaps >=250 ms (not applied 1 s after a crash)",
       "Headlamp AUTO in RUN: low beam on within 3 s of darkness (<1000 lux) or light-sensor loss",
       "Headlamp AUTO in RUN: no two low-beam transitions within 2 s",
       "Wiper motor not energised for >3.5 s without park-switch movement (stall)",
-      "Wiper parked with motor off 2.5 s after the switch is turned off",
+      "Wiper parked with motor off 2.5 s after the switch is turned off (after-wash wipes excepted)",
       "Lock actuator energised <=500 ms per activation and <=10 activations per 30 s",
       "Bus-off handling: <=6 recovery attempts in any 1 s window",
       "BCM_Status transmitted with gaps <=150 ms while the bus is healthy",
@@ -43,8 +43,8 @@ void RequirementMonitor::observe(uint32_t t, const VehicleSim& sim, const hal::S
   const bool lamp_l = hal.output(Dout::TurnLeftLamp), lamp_r = hal.output(Dout::TurnRightLamp);
 
   // ---- R1 crash response -----------------------------------------------------
-  if (sim.crash_confirmed_ms >= 0 && !r1_done_) {
-    const int64_t tc = sim.crash_confirmed_ms;
+  if (sim.crash_first_ms >= 0 && !r1_done_) {
+    const int64_t tc = sim.crash_first_ms;
     const int64_t dt = now - tc;
     if (dt >= 0) {
       if (dt == 0) r1_locked_at_crash_ = locked;
@@ -98,13 +98,21 @@ void RequirementMonitor::observe(uint32_t t, const VehicleSim& sim, const hal::S
   starter_prev_ = starter;
 
   // ---- R4 flasher timing --------------------------------------------------------
+  // a crash takes priority: R4 is not applied for 1 s after the crash frame
+  const bool crash_window = sim.crash_first_ms >= 0 && now - sim.crash_first_ms < 1000;
   const bool lamp_now[2] = {lamp_l, lamp_r};
   for (int i = 0; i < 2; ++i) {
     Lamp& L = lamps_[i];
+    if (crash_window) {
+      L.rise = lamp_now[i] ? (L.prev ? L.rise : now) : -1;
+      L.fall = -1;
+      L.prev = lamp_now[i];
+      continue;
+    }
     if (lamp_now[i] && !L.prev) {
       if (L.fall >= 0 && now - L.fall < 250) flag(Req::FlasherTiming);
       L.rise = now;
-    } else if (!lamp_now[i] && L.prev) {
+    } else if (!lamp_now[i] && L.prev && L.rise >= 0) {
       const int64_t on = now - L.rise;
       if (on < 250) flag(Req::FlasherTiming);  // long pulses caught below
       L.fall = now;
@@ -159,13 +167,17 @@ void RequirementMonitor::observe(uint32_t t, const VehicleSim& sim, const hal::S
   r7_motor_prev_ = motor;
 
   // ---- R8 wiper park after switch-off -------------------------------------------------
+  if (sim.wiper_stalled) r8_last_stall_ = now;
   if (sim.last_wiper_off_ms >= 0 && sim.last_wiper_off_ms != r8_checked_for_ &&
       now - sim.last_wiper_off_ms >= 2500) {
     r8_checked_for_ = sim.last_wiper_off_ms;
     const bool sw_off = !sim.switch_level(Din::WiperAuto) && !sim.switch_level(Din::WiperLow) &&
                         !sim.switch_level(Din::WiperHigh) && !sim.switch_level(Din::WasherSw);
     const bool powered = sim.key() == KeyPos::Acc || sim.key() == KeyPos::Run;
-    if (sw_off && powered && !sim.wiper_stalled && !sim.stuck(Din::WasherSw) && (motor || !park)) {
+    // after-wash dry wipes (up to ~3 s) are allowed to finish
+    const bool after_wash = now - sim.last_washer_release_ms < 6000;
+    // a mechanically blocked wiper at any time in the window cannot park
+    if (sw_off && powered && !after_wash && r8_last_stall_ < sim.last_wiper_off_ms && r8_last_stall_ < sim.last_wiper_off_ms && !sim.stuck(Din::WasherSw) && (motor || !park)) {
       flag(Req::WiperPark);
     }
   }

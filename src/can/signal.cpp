@@ -1,6 +1,7 @@
 #include "bcm/can/signal.hpp"
 
 #include <cmath>
+#include <cstddef>
 
 namespace bcm::can {
 
@@ -84,7 +85,29 @@ void encode(Frame& f, const SignalDef& s, double phys) {
   insert_raw(f.data.data(), s, raw);
 }
 
+namespace {
+// CRC-8 SAE J1850 (poly 0x1D, init 0xFF, final xor 0xFF), as used by the
+// AUTOSAR E2E profile 1/2 family. Detects all 1-, 2- and 3-bit errors in a
+// frame of this length, unlike a plain additive checksum.
+uint8_t crc8_j1850(const uint8_t* p, size_t n, uint8_t crc) {
+  for (size_t i = 0; i < n; ++i) {
+    crc ^= p[i];
+    for (int b = 0; b < 8; ++b) crc = (crc & 0x80U) ? static_cast<uint8_t>((crc << 1) ^ 0x1DU) : static_cast<uint8_t>(crc << 1);
+  }
+  return crc;
+}
+}  // namespace
+
 uint8_t compute_checksum(const Frame& f) {
+  // the message ID is included (as a 2-byte data ID) so that a frame with a
+  // valid CRC under another ID is rejected
+  const uint8_t id_bytes[2] = {static_cast<uint8_t>(f.id & 0xFFU), static_cast<uint8_t>((f.id >> 8) & 0xFFU)};
+  uint8_t crc = crc8_j1850(id_bytes, 2, 0xFF);
+  crc = crc8_j1850(f.data.data(), 7, crc);
+  return static_cast<uint8_t>(crc ^ 0xFFU);
+}
+
+uint8_t compute_checksum_additive(const Frame& f) {
   unsigned sum = (f.id & 0xFFU) + ((f.id >> 8) & 0xFFU);
   for (int i = 0; i < 7; ++i) sum += f.data[i];
   return static_cast<uint8_t>((sum & 0xFFU) ^ 0xFFU);
